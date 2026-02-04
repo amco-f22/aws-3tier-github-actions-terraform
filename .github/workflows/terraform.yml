@@ -81,13 +81,32 @@ jobs:
     - name: Terraform Plan
       id: plan
       run: |
+        set -o pipefail
         terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
+        PLAN_EXIT_CODE=${PIPESTATUS[0]}
         echo "plan_output<<EOF" >> $GITHUB_OUTPUT
         head -c 60000 plan_output.txt >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
+        exit $PLAN_EXIT_CODE
       continue-on-error: true
 
-    # Step 8: Comment Plan on Pull Request
+    # Step 8: Verify Plan File Exists
+    - name: Verify Plan File
+      id: verify_plan
+      if: |
+        (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+      run: |
+        if [ -f tfplan ]; then
+          echo "Plan file exists"
+          echo "plan_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "::error::Plan file 'tfplan' not found. The terraform plan may have failed."
+          echo "plan_exists=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    # Step 9: Comment Plan on Pull Request
     - name: Comment Plan on PR
       if: github.event_name == 'pull_request'
       uses: actions/github-script@v7
@@ -118,21 +137,23 @@ jobs:
             body: output
           })
 
-    # Step 9: Check Plan Status
+    # Step 10: Check Plan Status
     - name: Check Plan Status
       if: steps.plan.outcome == 'failure'
       run: exit 1
 
-    # Step 10: Terraform Apply (only on main branch push or manual trigger with 'apply')
+    # Step 11: Terraform Apply (only on main branch push or manual trigger with 'apply')
     - name: Terraform Apply
       if: |
-        (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        steps.verify_plan.outputs.plan_exists == 'true' &&
+        ((github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'))
       run: terraform apply -auto-approve tfplan
 
-    # Step 11: Show Outputs after Apply
+    # Step 12: Show Outputs after Apply
     - name: Show Terraform Outputs
       if: |
-        (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        steps.verify_plan.outputs.plan_exists == 'true' &&
+        ((github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'))
       run: terraform output -no-color
