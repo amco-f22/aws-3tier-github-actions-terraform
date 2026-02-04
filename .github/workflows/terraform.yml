@@ -31,6 +31,7 @@ env:
   TF_WORKING_DIR: terraform-infra/environments/dev
   AWS_REGION: us-east-1
   TF_VERSION: '1.13.0'
+  TF_VAR_ssh_key_name: ${{ secrets.TF_VAR_SSH_KEY_NAME }}
 
 jobs:
   terraform:
