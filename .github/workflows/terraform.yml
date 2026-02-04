@@ -85,9 +85,10 @@ jobs:
         set -o pipefail
         terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
         PLAN_EXIT_CODE=${PIPESTATUS[0]}
-        echo "plan_output<<EOF" >> $GITHUB_OUTPUT
+        DELIMITER="PLAN_OUTPUT_$(date +%s)"
+        echo "plan_output<<${DELIMITER}" >> $GITHUB_OUTPUT
         head -c 60000 plan_output.txt >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "${DELIMITER}" >> $GITHUB_OUTPUT
         exit $PLAN_EXIT_CODE
       continue-on-error: true
 
