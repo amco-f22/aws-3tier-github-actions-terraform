@@ -1,0 +1,138 @@
+name: 'Terraform CI/CD'
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lessons/day28/terraform-infra/**'
+      - '.github/workflows/terraform.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'lessons/day28/terraform-infra/**'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_WORKING_DIR: lessons/day28/terraform-infra/environments/dev
+  AWS_REGION: us-east-1
+  TF_VERSION: '1.13.0'
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+    steps:
+    # Step 1: Checkout the repository
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # Step 2: Setup Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+        terraform_wrapper: false
+
+    # Step 3: Configure AWS Credentials
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    # Step 4: Terraform Format Check
+    - name: Terraform Format Check
+      id: fmt
+      run: terraform fmt -check -recursive
+      continue-on-error: true
+
+    # Step 5: Terraform Init
+    - name: Terraform Init
+      id: init
+      run: terraform init
+
+    # Step 6: Terraform Validate
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+
+    # Step 7: Terraform Plan
+    - name: Terraform Plan
+      id: plan
+      run: |
+        terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
+        echo "plan_output<<EOF" >> $GITHUB_OUTPUT
+        head -c 60000 plan_output.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+      continue-on-error: true
+
+    # Step 8: Comment Plan on Pull Request
+    - name: Comment Plan on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `### Terraform Plan Results 📋
+          
+          #### Format Check 🖌️: \`${{ steps.fmt.outcome }}\`
+          #### Initialization ⚙️: \`${{ steps.init.outcome }}\`
+          #### Validation 🤖: \`${{ steps.validate.outcome }}\`
+          #### Plan 📖: \`${{ steps.plan.outcome }}\`
+          
+          <details><summary>Show Plan Output</summary>
+          
+          \`\`\`terraform
+          ${{ steps.plan.outputs.plan_output }}
+          \`\`\`
+          
+          </details>
+          
+          *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    # Step 9: Check Plan Status
+    - name: Check Plan Status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    # Step 10: Terraform Apply (only on main branch push or manual trigger with 'apply')
+    - name: Terraform Apply
+      if: |
+        (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+      run: terraform apply -auto-approve tfplan
+
+    # Step 11: Show Outputs after Apply
+    - name: Show Terraform Outputs
+      if: |
+        (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+      run: terraform output -no-color

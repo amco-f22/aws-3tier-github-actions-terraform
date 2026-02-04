@@ -1,0 +1,139 @@
+name: 'Terraform Destroy'
+
+# This workflow is manually triggered from GitHub UI
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          # Add more environments as needed:
+          # - staging
+          # - prod
+      confirm:
+        description: 'Type "destroy" to confirm infrastructure destruction'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: '1.13.0'
+
+jobs:
+  # Job 1: Validate the confirmation input
+  validate:
+    name: 'Validate Confirmation'
+    runs-on: ubuntu-latest
+    outputs:
+      confirmed: ${{ steps.check.outputs.confirmed }}
+    steps:
+      - name: Check Confirmation
+        id: check
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" = "destroy" ]; then
+            echo "confirmed=true" >> $GITHUB_OUTPUT
+            echo "✅ Destruction confirmed by user"
+          else
+            echo "confirmed=false" >> $GITHUB_OUTPUT
+            echo "❌ Confirmation failed. You must type 'destroy' exactly."
+            exit 1
+          fi
+
+  # Job 2: Show the destroy plan for review
+  plan-destroy:
+    name: 'Plan Destroy'
+    runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.confirmed == 'true'
+    
+    defaults:
+      run:
+        working-directory: lessons/day28/terraform-infra/environments/${{ github.event.inputs.environment }}
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Destroy Plan
+      run: |
+        echo "🔍 Planning destruction for ${{ github.event.inputs.environment }} environment..."
+        terraform plan -destroy -no-color -out=destroy-plan
+
+    - name: Upload Destroy Plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: destroy-plan-${{ github.event.inputs.environment }}
+        path: lessons/day28/terraform-infra/environments/${{ github.event.inputs.environment }}/destroy-plan
+        retention-days: 1
+
+  # Job 3: Execute the destruction
+  destroy:
+    name: 'Execute Destroy'
+    runs-on: ubuntu-latest
+    needs: [validate, plan-destroy]
+    if: needs.validate.outputs.confirmed == 'true'
+    environment: ${{ github.event.inputs.environment }}
+    
+    defaults:
+      run:
+        working-directory: lessons/day28/terraform-infra/environments/${{ github.event.inputs.environment }}
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Download Destroy Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: destroy-plan-${{ github.event.inputs.environment }}
+        path: lessons/day28/terraform-infra/environments/${{ github.event.inputs.environment }}
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Destroy
+      run: |
+        echo "🗑️ Destroying ${{ github.event.inputs.environment }} environment..."
+        echo "⚠️ This action is IRREVERSIBLE!"
+        terraform apply -auto-approve destroy-plan
+
+    - name: Destruction Complete
+      run: |
+        echo "✅ Infrastructure destruction complete!"
+        echo "Environment: ${{ github.event.inputs.environment }}"
+        echo "Triggered by: ${{ github.actor }}"
+        echo "Time: $(date -u)"
