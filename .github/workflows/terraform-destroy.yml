@@ -55,7 +55,7 @@ jobs:
     
     defaults:
       run:
-        working-directory: lessons/day28/terraform-infra/environments/${{ github.event.inputs.environment }}
+        working-directory: terraform-infra/environments/${{ github.event.inputs.environment }}
 
     steps:
     - name: Checkout Code
@@ -85,7 +85,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: destroy-plan-${{ github.event.inputs.environment }}
-        path: lessons/day28/terraform-infra/environments/${{ github.event.inputs.environment }}/destroy-plan
+        path: terraform-infra/environments/${{ github.event.inputs.environment }}/destroy-plan
         retention-days: 1
 
   # Job 3: Execute the destruction
@@ -98,7 +98,7 @@ jobs:
     
     defaults:
       run:
-        working-directory: lessons/day28/terraform-infra/environments/${{ github.event.inputs.environment }}
+        working-directory: terraform-infra/environments/${{ github.event.inputs.environment }}
 
     steps:
     - name: Checkout Code
@@ -120,7 +120,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: destroy-plan-${{ github.event.inputs.environment }}
-        path: lessons/day28/terraform-infra/environments/${{ github.event.inputs.environment }}
+        path: terraform-infra/environments/${{ github.event.inputs.environment }}
 
     - name: Terraform Init
       run: terraform init

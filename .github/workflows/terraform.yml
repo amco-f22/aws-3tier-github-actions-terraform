@@ -5,13 +5,13 @@ on:
     branches:
       - main
     paths:
-      - 'lessons/day28/terraform-infra/**'
+      - 'terraform-infra/**'
       - '.github/workflows/terraform.yml'
   pull_request:
     branches:
       - main
     paths:
-      - 'lessons/day28/terraform-infra/**'
+      - 'terraform-infra/**'
   workflow_dispatch:
     inputs:
       action:
@@ -28,7 +28,7 @@ permissions:
   pull-requests: write
 
 env:
-  TF_WORKING_DIR: lessons/day28/terraform-infra/environments/dev
+  TF_WORKING_DIR: terraform-infra/environments/dev
   AWS_REGION: us-east-1
   TF_VERSION: '1.13.0'
 
