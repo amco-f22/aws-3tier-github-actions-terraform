@@ -11,10 +11,15 @@ resource "aws_db_subnet_group" "main" {
   )
 }
 
+# Extract the major version from engine_version for parameter group family
+locals {
+  pg_major_version = split(".", var.engine_version)[0]
+}
+
 # DB Parameter Group
 resource "aws_db_parameter_group" "main" {
-  name   = "${var.environment}-${var.project}-pg17"
-  family = "postgres17"
+  name   = "${var.environment}-${var.project}-pg${local.pg_major_version}"
+  family = "postgres${local.pg_major_version}"
 
   parameter {
     name  = "log_connections"
@@ -34,7 +39,7 @@ resource "aws_db_parameter_group" "main" {
   tags = merge(
     var.tags,
     {
-      Name = "${var.environment}-${var.project}-pg17"
+      Name = "${var.environment}-${var.project}-pg${local.pg_major_version}"
     }
   )
 }
