@@ -9,7 +9,7 @@
 
 ## 📋 Project Overview
 
-This project automates the deployment of a highly available, fault-tolerant **3-Tier Architecture** on AWS using **Terraform**. It hosts a real-time banking application ("Goal Tracker") containerized with Docker.
+This project automates the deployment of a highly available, fault-tolerant **3-Tier Architecture** on AWS using **Terraform**. It hosts a **Goal Tracker** application—a personal goals management system where users can create, view, and delete their goals. The application is containerized with Docker, featuring a **Node.js frontend** and a **Go (Gin) backend** with **PostgreSQL** database.
 
 The infrastructure follows industry best practices:
 - **Tier 1 (Presentation):** Frontend running in private subnets behind an **Internet-Facing Application Load Balancer**.
